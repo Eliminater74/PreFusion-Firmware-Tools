@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "Ext2Read.WinForms/1.0.0": {
+        "dependencies": {
+          "Ext2Read.Core": "1.0.0"
+        },
+        "runtime": {
+          "Ext2Read.WinForms.dll": {}
+        }
+      },
+      "Ext2Read.Core/1.0.0": {
+        "runtime": {
+          "Ext2Read.Core.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Ext2Read.WinForms/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Ext2Read.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
