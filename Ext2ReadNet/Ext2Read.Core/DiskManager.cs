@@ -41,6 +41,54 @@ namespace Ext2Read.Core
             return partitions;
         }
 
+        public List<Ext2Partition> ScanImage(string path)
+        {
+            var partitions = new List<Ext2Partition>();
+            var disk = new DiskAccess();
+
+            // Try to open the file
+            if (!disk.Open(path))
+            {
+                return partitions;
+            }
+
+            _openedDisks.Add(disk);
+
+            // 1. Try to scan as a full disk (MBR/GPT)
+            var drivePartitions = ScanPartitions(disk, -1); // -1 indicating image file
+            if (drivePartitions.Count > 0)
+            {
+                partitions.AddRange(drivePartitions);
+                // Also update names to reflect image
+                foreach (var p in partitions)
+                {
+                    // p.Name setter is private/not exposed? We might need to adjust or just leave generic
+                    // For now, simpler to just accept generic names or refactor Ext2Partition to have settable Name
+                }
+            }
+            else
+            {
+                // 2. If no partitions found, maybe it's a raw loopback partition (just the FS)
+                // Check superblock at 1024 bytes
+                byte[] sbData = disk.ReadSector(2, 2, PartitionConstants.SECTOR_SIZE); // 1024 bytes offset
+                if (sbData != null)
+                {
+                    var sb = BytesToStruct<EXT2_SUPER_BLOCK>(sbData, 0);
+                    if (sb.s_magic == Ext2Constants.EXT2_SUPER_MAGIC)
+                    {
+                        // It's a raw ext2 image
+                        // Use file size for sector count? Or from superblock
+                        long fileSize = new FileInfo(path).Length;
+                        ulong sectors = (ulong)(fileSize / PartitionConstants.SECTOR_SIZE);
+
+                        partitions.Add(new Ext2Partition(disk, 0, sectors, PartitionConstants.SECTOR_SIZE, $"Image: {System.IO.Path.GetFileName(path)}"));
+                    }
+                }
+            }
+
+            return partitions;
+        }
+
         private List<Ext2Partition> ScanPartitions(DiskAccess disk, int diskIndex)
         {
             var parts = new List<Ext2Partition>();
