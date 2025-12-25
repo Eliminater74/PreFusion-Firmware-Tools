@@ -21,19 +21,29 @@ namespace Ext2Read.WinForms
             _diskManager = new DiskManager();
         }
 
-        private void MainForm_Load(object sender, EventArgs e)
+        private async void MainForm_Load(object sender, EventArgs e)
         {
-            ScanDisks();
+            await ScanDisksAsync();
         }
 
-        private void ScanDisks()
+        private async System.Threading.Tasks.Task ScanDisksAsync()
         {
             treeView1.Nodes.Clear();
             _fileSystems.Clear();
 
+            // Show loading state
+            var loadingNode = new TreeNode("Scanning for Linux partitions...");
+            treeView1.Nodes.Add(loadingNode);
+            treeView1.Enabled = false;
+
             try
             {
-                var partitions = _diskManager.ScanSystem();
+                // Run heavy scan on background thread
+                var partitions = await System.Threading.Tasks.Task.Run(() => _diskManager.ScanSystem());
+
+                treeView1.Nodes.Remove(loadingNode);
+                treeView1.Enabled = true;
+
                 if (partitions.Count == 0)
                 {
                     MessageBox.Show("No Linux Ext2/3/4 partitions found.", "Ext2Read", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -42,6 +52,9 @@ namespace Ext2Read.WinForms
 
                 foreach (var part in partitions)
                 {
+                    // Mount on background too if it takes time, but usually fast. 
+                    // Let's keep mount explicit to ensure thread safety if FileSystem object is not thread safe yet.
+                    // Doing Mount here on UI thread is fine as it's just reading Superblock (1 seek/read).
                     var fs = new Ext2FileSystem(part);
                     if (fs.Mount())
                     {
@@ -51,7 +64,7 @@ namespace Ext2Read.WinForms
                         node.ImageIndex = 0; // Drive icon
                         node.SelectedImageIndex = 0;
                         treeView1.Nodes.Add(node);
-                        
+
                         // Add dummy node to allow expansion
                         node.Nodes.Add("Loading...");
                     }
@@ -61,25 +74,39 @@ namespace Ext2Read.WinForms
             {
                 MessageBox.Show($"Error scanning disks: {ex.Message}\nMake sure you are running as Administrator.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-
-        private void treeView1_BeforeExpand(object sender, TreeViewCancelEventArgs e)
-        {
-            if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0].Text == "Loading...")
+            finally
             {
-                e.Node.Nodes.Clear();
-                LoadDirectory(e.Node);
+                treeView1.Enabled = true;
             }
         }
 
-        private void LoadDirectory(TreeNode parentNode)
+        private async void treeView1_BeforeExpand(object sender, TreeViewCancelEventArgs e)
+        {
+            if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0].Text == "Loading...")
+            {
+                // Don't clear immediately, let "Loading..." stay while we fetch
+                // e.Node.Nodes.Clear(); 
+                // Creating a separate method to avoid async void issues if possible, but for event handlers async void is standard.
+                e.Cancel = true; // Cancel the expand so we can handle it manually after load? 
+                                 // No, standard pattern: let it expand showing "Loading...", then populate.
+                e.Cancel = false;
+
+                await LoadDirectoryAsync(e.Node);
+            }
+        }
+
+        private async System.Threading.Tasks.Task LoadDirectoryAsync(TreeNode parentNode)
         {
             var data = parentNode.Tag as NodeData;
             if (data == null) return;
 
             try
             {
-                var files = data.FileSystem.ListDirectory(data.Inode);
+                var files = await System.Threading.Tasks.Task.Run(() => data.FileSystem.ListDirectory(data.Inode));
+
+                // Back on UI thread
+                parentNode.Nodes.Clear(); // Remove "Loading..."
+
                 foreach (var file in files)
                 {
                     if (file.IsDirectory)
@@ -89,7 +116,7 @@ namespace Ext2Read.WinForms
                         node.ImageIndex = 1; // Folder icon
                         node.SelectedImageIndex = 1;
                         parentNode.Nodes.Add(node);
-                        
+
                         // Add dummy for expansion
                         node.Nodes.Add("Loading...");
                     }
@@ -97,32 +124,43 @@ namespace Ext2Read.WinForms
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error reading directory: {ex.Message}");
+                parentNode.Nodes.Clear();
+                parentNode.Nodes.Add(new TreeNode("Error: " + ex.Message));
             }
         }
 
-        private void treeView1_AfterSelect(object sender, TreeViewEventArgs e)
+        private async void treeView1_AfterSelect(object sender, TreeViewEventArgs e)
         {
             listView1.Items.Clear();
             var data = e.Node.Tag as NodeData;
             if (data == null) return;
 
+            // Show loading in ListView
+            listView1.Items.Add(new ListViewItem("Loading items..."));
+
             try
             {
-                var files = data.FileSystem.ListDirectory(data.Inode);
+                var files = await System.Threading.Tasks.Task.Run(() => data.FileSystem.ListDirectory(data.Inode));
+
+                listView1.Items.Clear(); // Clear "Loading..."
+
+                // Optimizing ListView population with BeginUpdate/EndUpdate for massive folders
+                listView1.BeginUpdate();
                 foreach (var file in files)
                 {
                     ListViewItem item = new ListViewItem(file.Name);
                     item.ImageIndex = file.IsDirectory ? 1 : 2; // Folder or File
                     if (file.IsDirectory) item.SubItems.Add("Directory");
-                    else item.SubItems.Add("File"); // Could get size from Inode if ListDirectory returned it
-                    
+                    else item.SubItems.Add("File");
+
                     listView1.Items.Add(item);
                 }
+                listView1.EndUpdate();
             }
             catch (Exception ex)
             {
-                 MessageBox.Show($"Error reading directory: {ex.Message}");
+                listView1.Items.Clear();
+                MessageBox.Show($"Error reading directory: {ex.Message}");
             }
         }
 
@@ -197,7 +235,7 @@ namespace Ext2Read.WinForms
             this.splitContainer1.Panel2.ResumeLayout(false);
             this.splitContainer1.ResumeLayout(false);
             this.ResumeLayout(false);
-            
+
             // ImageList setup could be done here with resources, skipping for simple text MVP or using system icons later
             // Adding placeholder images
             // this.imageList1.Images.Add(...) 
@@ -207,7 +245,7 @@ namespace Ext2Read.WinForms
         {
             if (disposing)
             {
-                 if (_diskManager != null) _diskManager.Dispose();
+                if (_diskManager != null) _diskManager.Dispose();
             }
             base.Dispose(disposing);
         }

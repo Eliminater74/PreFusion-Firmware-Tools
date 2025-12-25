@@ -13,30 +13,31 @@ namespace Ext2Read.Core
         public List<Ext2Partition> ScanSystem()
         {
             var partitions = new List<Ext2Partition>();
+            var localDisks = new List<DiskAccess>();
+            object lockObj = new object();
 
-            for (int i = 0; i < MAX_DRIVES; i++)
+            System.Threading.Tasks.Parallel.For(0, MAX_DRIVES, i =>
             {
                 string path = $"\\\\.\\PhysicalDrive{i}";
                 var disk = new DiskAccess();
 
                 if (disk.Open(path))
                 {
-                    _openedDisks.Add(disk); // Keep track to close later
-                    var drivePartitions = ScanPartitions(disk, i);
-                    partitions.AddRange(drivePartitions);
-                }
-                else
-                {
-                    // Stop after a few consecutive failures? Or just check specific range? 
-                    // Usually disks are sequential 0, 1, 2. If 0 fails, we might still check others but likely none exist.
-                    // If PhysicalDrive0 exists but 1 doesn't, Open returns false.
-                    if (i == 0) continue; // If 0 failed, maybe try 1 (weird config?). But generally if i fail, likely end of list.
-                                          // To be safe we continue, but practically break is often used. 
-                                          // C++ code: get_ndisks loops until failure.
-                    if (i > 0) break; // Optimization: detailed gap handling not needed for now
-                }
-            }
+                    lock (lockObj)
+                    {
+                        localDisks.Add(disk);
+                    }
 
+                    var drivePartitions = ScanPartitions(disk, i);
+
+                    lock (lockObj)
+                    {
+                        partitions.AddRange(drivePartitions);
+                    }
+                }
+            });
+
+            _openedDisks.AddRange(localDisks);
             return partitions;
         }
 
