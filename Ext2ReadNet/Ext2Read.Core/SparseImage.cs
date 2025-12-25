@@ -67,7 +67,7 @@ namespace Ext2Read.Core
                 var header = BytesToStruct<SparseHeader>(headerBytes);
 
                 if (header.magic != SPARSE_HEADER_MAGIC)
-                    throw new InvalidDataException("Invalid sparse image magic.");
+                    throw new InvalidDataException($"Invalid sparse image magic: 0x{header.magic:X8} (Expected 0x{SPARSE_HEADER_MAGIC:X8}). File might be raw image or encrypted.");
 
                 // Check version (only support 1.0)
                 if (header.major_version != 1 || header.minor_version != 0)

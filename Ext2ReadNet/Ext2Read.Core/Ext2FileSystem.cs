@@ -15,6 +15,7 @@ namespace Ext2Read.Core
         private int _inodeSize;
 
         public string VolumeName => _superBlock.s_volume_name;
+        public string LastDebugMessage { get; private set; }
 
         public Ext2FileSystem(Ext2Partition partition)
         {
@@ -102,32 +103,61 @@ namespace Ext2Read.Core
 
             // Iterate blocks
             int nBlocks = (int)(inode.i_size + _blockSize - 1) / _blockSize;
-            // FIXME: Handle indirect blocks (omitted for brevity in MVP plan)
-            // Assuming direct blocks for typical small root folders
+            StringBuilder debug = new StringBuilder();
+            debug.AppendLine($"Listing Inode {dirInodeNum}: Size={inode.i_size}, Blocks={inode.i_blocks}, nBlocks={nBlocks}");
 
-            for (int i = 0; i < 12; i++) // Direct blocks
+            for (int i = 0; i < 12 && i < nBlocks; i++) // Direct blocks
             {
-                if (inode.i_block[i] == 0) break;
+                if (inode.i_block[i] == 0)
+                {
+                    debug.AppendLine($"Block[{i}] is 0. Ending.");
+                    break;
+                }
 
+                debug.AppendLine($"Reading Block[{i}] @ {inode.i_block[i]}");
                 byte[] block = _partition.ReadBlock(inode.i_block[i], _blockSize);
+                if (block == null)
+                {
+                    debug.AppendLine("ReadBlock returned null.");
+                    break;
+                }
+
                 int offset = 0;
                 while (offset < _blockSize)
                 {
+                    // Check if we have enough bytes for fixed header (8 bytes)
+                    if (offset + 8 > _blockSize)
+                    {
+                        debug.AppendLine($"Offset {offset} + 8 > BlockSize {_blockSize}. Break.");
+                        break;
+                    }
+
                     var entry = BytesToStruct<EXT2_DIR_ENTRY>(block, offset);
-                    if (entry.rec_len == 0) break; // formatting error? block end?
+                    if (entry.rec_len == 0)
+                    {
+                        debug.AppendLine($"Offset {offset}: rec_len is 0. Break.");
+                        break;
+                    }
+
+                    // Check if record length goes beyond block
+                    if (offset + entry.rec_len > _blockSize)
+                    {
+                        debug.AppendLine($"Offset {offset}: rec_len {entry.rec_len} > remaining. Break.");
+                        break;
+                    }
 
                     if (entry.inode != 0)
                     {
-                        // Read name
-                        // Name is at offset + 8 (sizeof fixed part of dir_entry is 8 bytes in C struct? No 4+2+1+1 = 8)
-                        // Actually struct definition:
-                        // uint inode 4
-                        // ushort rec_len 2
-                        // byte name_len 1 
-                        // byte filetype 1
-                        // Total 8 bytes. Correct.
+                        // Check name length bounds
+                        if (offset + 8 + entry.name_len > _blockSize)
+                        {
+                            debug.AppendLine($"Offset {offset}: Name len {entry.name_len} out of bounds. Break.");
+                            break;
+                        }
 
                         string name = Encoding.Default.GetString(block, offset + 8, entry.name_len);
+                        debug.AppendLine($"Found: {name} (Inode {entry.inode})");
+
                         if (name != "." && name != "..")
                         {
                             // Get type info
@@ -143,6 +173,7 @@ namespace Ext2Read.Core
                     offset += entry.rec_len;
                 }
             }
+            LastDebugMessage = debug.ToString();
             return files;
         }
 

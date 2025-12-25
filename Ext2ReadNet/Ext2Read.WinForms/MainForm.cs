@@ -12,6 +12,9 @@ namespace Ext2Read.WinForms
         private ToolStripMenuItem fileToolStripMenuItem;
         private ToolStripMenuItem openImageToolStripMenuItem;
         private ToolStripMenuItem rescanToolStripMenuItem;
+        private ToolStripMenuItem toolsToolStripMenuItem;
+        private ToolStripMenuItem convertSparseToolStripMenuItem;
+        private ToolStripMenuItem autoScanToolStripMenuItem;
         private ToolStripMenuItem exitToolStripMenuItem;
         private SplitContainer splitContainer1;
         private TreeView treeView1;
@@ -28,7 +31,13 @@ namespace Ext2Read.WinForms
 
         private async void MainForm_Load(object sender, EventArgs e)
         {
-            await ScanDisksAsync();
+            // Sync UI with Settings
+            autoScanToolStripMenuItem.Checked = AppSettings.Instance.AutoScanOnStartup;
+
+            if (AppSettings.Instance.AutoScanOnStartup)
+            {
+                await ScanDisksAsync();
+            }
         }
 
         private async System.Threading.Tasks.Task ScanDisksAsync()
@@ -111,6 +120,11 @@ namespace Ext2Read.WinForms
 
                 // Back on UI thread
                 parentNode.Nodes.Clear(); // Remove "Loading..."
+
+                if (files.Count == 0 && data.Inode == 2)
+                {
+                    MessageBox.Show($"Debug Info for Root Directory:\n{data.FileSystem.LastDebugMessage}", "Empty Directory Debug");
+                }
 
                 foreach (var file in files)
                 {
@@ -237,9 +251,10 @@ namespace Ext2Read.WinForms
                     try
                     {
                         var partitions = await System.Threading.Tasks.Task.Run(() => _diskManager.ScanImage(fileToOpen));
+
                         if (partitions.Count == 0)
                         {
-                            MessageBox.Show("No Linux Ext2/3/4 partitions found in image.", "Ext2Read", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            MessageBox.Show("No Linux Ext2/3/4 partitions or filesystems found in this image.\n\nThe image might be:\n- Encrypted\n- Using a feature not supported by Ext2Read\n- Not a valid disk image", "No Partitions Found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             return;
                         }
 
@@ -267,9 +282,62 @@ namespace Ext2Read.WinForms
             }
         }
 
+        private void autoScanToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            AppSettings.Instance.AutoScanOnStartup = !AppSettings.Instance.AutoScanOnStartup;
+            autoScanToolStripMenuItem.Checked = AppSettings.Instance.AutoScanOnStartup;
+            AppSettings.Instance.Save();
+        }
+
         private async void rescanToolStripMenuItem_Click(object sender, EventArgs e)
         {
             await ScanDisksAsync();
+        }
+
+        private async void convertSparseToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog ofd = new OpenFileDialog())
+            {
+                ofd.Title = "Select Android Sparse Img to Convert";
+                ofd.Filter = "Sparse Images (*.img;*.simg)|*.img;*.simg|All files (*.*)|*.*";
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    if (!SparseConverter.IsSparseImage(ofd.FileName))
+                    {
+                        MessageBox.Show("The selected file does not appear to be a valid Android Sparse Image.", "Invalid Image", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    using (SaveFileDialog sfd = new SaveFileDialog())
+                    {
+                        sfd.Filter = "Raw Disk Image (*.img)|*.img";
+                        sfd.FileName = Path.GetFileNameWithoutExtension(ofd.FileName) + "_raw.img";
+                        if (sfd.ShowDialog() == DialogResult.OK)
+                        {
+                            var loadingNode = new TreeNode("Converting sparse image...");
+                            treeView1.Nodes.Add(loadingNode);
+                            treeView1.Enabled = false;
+
+                            try
+                            {
+                                await System.Threading.Tasks.Task.Run(() =>
+                                    SparseConverter.Convert(ofd.FileName, sfd.FileName, null));
+
+                                MessageBox.Show("Conversion complete! You can now open the raw image.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show($"Conversion failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                            finally
+                            {
+                                treeView1.Nodes.Remove(loadingNode);
+                                treeView1.Enabled = true;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         private void InitializeComponent()
@@ -279,6 +347,9 @@ namespace Ext2Read.WinForms
             this.openImageToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.rescanToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.convertSparseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.autoScanToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
             this.treeView1 = new System.Windows.Forms.TreeView();
             this.listView1 = new System.Windows.Forms.ListView();
@@ -295,7 +366,8 @@ namespace Ext2Read.WinForms
             // menuStrip1
             // 
             this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.fileToolStripMenuItem});
+            this.fileToolStripMenuItem,
+            this.toolsToolStripMenuItem});
             this.menuStrip1.Location = new System.Drawing.Point(0, 0);
             this.menuStrip1.Name = "menuStrip1";
             this.menuStrip1.Size = new System.Drawing.Size(800, 24);
@@ -336,6 +408,33 @@ namespace Ext2Read.WinForms
             this.exitToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.exitToolStripMenuItem.Text = "E&xit";
             this.exitToolStripMenuItem.Click += (s, e) => Close();
+
+            // 
+            // toolsToolStripMenuItem
+            // 
+            this.toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.convertSparseToolStripMenuItem,
+            this.autoScanToolStripMenuItem});
+            this.toolsToolStripMenuItem.Name = "toolsToolStripMenuItem";
+            this.toolsToolStripMenuItem.Size = new System.Drawing.Size(46, 20);
+            this.toolsToolStripMenuItem.Text = "&Tools";
+
+            // 
+            // convertSparseToolStripMenuItem
+            // 
+            this.convertSparseToolStripMenuItem.Name = "convertSparseToolStripMenuItem";
+            this.convertSparseToolStripMenuItem.Size = new System.Drawing.Size(235, 22);
+            this.convertSparseToolStripMenuItem.Text = "&Convert Android Sparse Image";
+            this.convertSparseToolStripMenuItem.Click += new System.EventHandler(this.convertSparseToolStripMenuItem_Click);
+
+            // 
+            // autoScanToolStripMenuItem
+            // 
+            this.autoScanToolStripMenuItem.Name = "autoScanToolStripMenuItem";
+            this.autoScanToolStripMenuItem.Size = new System.Drawing.Size(235, 22);
+            this.autoScanToolStripMenuItem.Text = "&Auto Scan Physical Drives";
+            this.autoScanToolStripMenuItem.CheckOnClick = true;
+            this.autoScanToolStripMenuItem.Click += new System.EventHandler(this.autoScanToolStripMenuItem_Click);
 
             // 
             // splitContainer1
