@@ -34,6 +34,12 @@ namespace Ext2Read.Core.Binwalk
         public double Entropy { get; set; } // 0.0 to 8.0
     }
 
+    public class StringResult
+    {
+        public long Offset { get; set; }
+        public string Text { get; set; } = "";
+    }
+
     public static class Scanner
     {
         public static List<Signature> DefaultSignatures = new List<Signature>
@@ -197,6 +203,68 @@ namespace Ext2Read.Core.Binwalk
             }
 
             return entropy;
+        }
+
+        public static async Task<List<StringResult>> ExtractStringsAsync(string file, int minLen = 4, IProgress<float>? progress = null)
+        {
+            var results = new List<StringResult>();
+            if (!File.Exists(file)) return results;
+
+            using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                byte[] buffer = new byte[1024 * 64]; // 64KB buffer
+                long length = fs.Length;
+                long totalRead = 0;
+                int bytesRead;
+
+                // State
+                long currentStringOffset = -1;
+                var currentString = new StringBuilder();
+
+                while ((bytesRead = await fs.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    for (int i = 0; i < bytesRead; i++)
+                    {
+                        byte b = buffer[i];
+                        char c = (char)b;
+
+                        // Printable ASCII check (32-126) + Tab/Newline? usually just 32-126
+                        bool isPrintable = (b >= 32 && b <= 126);
+
+                        if (isPrintable)
+                        {
+                            if (currentString.Length == 0) currentStringOffset = totalRead + i;
+                            currentString.Append(c);
+                        }
+                        else
+                        {
+                            if (currentString.Length >= minLen)
+                            {
+                                results.Add(new StringResult 
+                                { 
+                                    Offset = currentStringOffset, 
+                                    Text = currentString.ToString() 
+                                });
+                            }
+                            currentString.Clear();
+                        }
+                    }
+
+                    totalRead += bytesRead;
+                    if (progress != null) progress.Report((float)totalRead / length);
+                }
+                
+                // Final flush
+                if (currentString.Length >= minLen)
+                {
+                    results.Add(new StringResult 
+                    { 
+                        Offset = currentStringOffset, 
+                        Text = currentString.ToString() 
+                    });
+                }
+            }
+            return results;
         }
     }
 }
