@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using PreFusion.Core.FileSystems.Jffs2; // Add Namespace
 
 namespace Ext2Read.Core
 {
@@ -9,6 +11,8 @@ namespace Ext2Read.Core
     {
         private List<DiskAccess> _openedDisks = new List<DiskAccess>();
         const int MAX_DRIVES = 16;
+
+        public List<Jffs2FileSystem> Jffs2Volumes { get; private set; } = new List<Jffs2FileSystem>();
 
         public List<Ext2Partition> ScanSystem()
         {
@@ -51,6 +55,34 @@ namespace Ext2Read.Core
             {
                 return partitions;
             }
+
+            // Check for JFFS2 Magic (0x1985)
+            try 
+            {
+                byte[] magicBuf = disk.ReadSector(0, 1, 4); // Read first 4 bytes
+                if (magicBuf != null && magicBuf.Length >= 2)
+                {
+                     ushort magic = BitConverter.ToUInt16(magicBuf, 0);
+                     if (magic == 0x1985 || magic == 0x8519)
+                     {
+                         var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                         var jffs2 = new Jffs2FileSystem(fs);
+                         jffs2.VolumeName = System.IO.Path.GetFileName(path);
+                         Jffs2Volumes.Add(jffs2);
+                         
+                         // Don't modify 'partitions' list as it's for Ext2Partition
+                         // But we should return empty or signal success?
+                         // ScanImage returns List<Ext2Partition>. Returning empty implies "no partitions found".
+                         // The caller (MainForm) should check Jffs2Volumes as well.
+                         // But wait, we just opened 'disk'. We should add it to _openedDisks or close it?
+                         // Jffs2FileSystem opens its own stream. 'disk' uses CreateFile/PInvoke.
+                         // If we use JFFS2, we don't need 'disk'.
+                         disk.Dispose(); 
+                         return partitions; 
+                     }
+                }
+            }
+            catch {}
 
             _openedDisks.Add(disk);
 

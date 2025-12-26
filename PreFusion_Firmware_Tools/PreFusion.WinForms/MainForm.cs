@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using Ext2Read.Core;
+using PreFusion.Core.FileSystems.Jffs2; // Add Namespace
 
 namespace Ext2Read.WinForms
 {
@@ -89,7 +90,7 @@ namespace Ext2Read.WinForms
 
                 if (partitions.Count == 0)
                 {
-                    MessageBox.Show("No Linux Ext2/3/4 partitions found.", "Ext2Read", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("No Linux Ext2/3/4 partitions found.", "PreFusion Firmware Tools", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
@@ -145,11 +146,30 @@ namespace Ext2Read.WinForms
 
             try
             {
+                // JFFS2 Logic
+                if (data.Jffs2System != null && data.Jffs2Entry != null)
+                {
+                     parentNode.Nodes.Clear();
+                     foreach(var child in data.Jffs2Entry.Children.OrderBy(c => c.Name)) // Sorted
+                     {
+                         if(child.IsDirectory)
+                         {
+                             TreeNode node = new TreeNode(child.Name);
+                             node.Tag = new NodeData { Jffs2System = data.Jffs2System, Jffs2Entry = child };
+                             node.ImageIndex = 1;
+                             node.SelectedImageIndex = 1;
+                             parentNode.Nodes.Add(node);
+                             node.Nodes.Add("Loading...");
+                         }
+                     }
+                     return;
+                }
+
+                // Ext2 Logic
                 var files = await System.Threading.Tasks.Task.Run(() => data.FileSystem.ListDirectory(data.Inode));
 
                 // Back on UI thread
                 parentNode.Nodes.Clear(); // Remove "Loading..."
-
 
                 foreach (var file in files)
                 {
@@ -184,6 +204,30 @@ namespace Ext2Read.WinForms
 
             try
             {
+                // JFFS2 Logic
+                if (data.Jffs2System != null && data.Jffs2Entry != null)
+                {
+                    listView1.Items.Clear();
+                    listView1.BeginUpdate();
+                     foreach(var child in data.Jffs2Entry.Children.OrderBy(c => c.Name)) // Sorted
+                     {
+                        ListViewItem item = new ListViewItem(child.Name);
+                        // Store full Jffs2 info in Tag
+                        item.Tag = new NodeData { Jffs2System = data.Jffs2System, Jffs2Entry = child, Name = child.Name };
+                        item.ImageIndex = child.IsDirectory ? 1 : 2;
+
+                        item.SubItems.Add(child.IsDirectory ? "" : FormatBytes(child.FileSize));
+                        item.SubItems.Add(child.IsDirectory ? "Directory" : "File");
+                        item.SubItems.Add(child.ModifiedTime.ToString("g"));
+                        item.SubItems.Add(FormatPermissions(child.Mode));
+                        item.SubItems.Add($"{child.Uid}/{child.Gid}");
+                        
+                        listView1.Items.Add(item);
+                     }
+                    listView1.EndUpdate();
+                    return;
+                }
+
                 var files = await System.Threading.Tasks.Task.Run(() => data.FileSystem.ListDirectory(data.Inode));
 
                 listView1.Items.Clear(); // Clear "Loading..."
@@ -292,12 +336,13 @@ namespace Ext2Read.WinForms
                     {
                         var partitions = await System.Threading.Tasks.Task.Run(() => _diskManager.ScanImage(fileToOpen));
 
-                        if (partitions.Count == 0)
+                        if (partitions.Count == 0 && _diskManager.Jffs2Volumes.Count == 0)
                         {
-                            MessageBox.Show("No Linux Ext2/3/4 partitions or filesystems found in this image.\n\nThe image might be:\n- Encrypted\n- Using a feature not supported by Ext2Read\n- Not a valid disk image", "No Partitions Found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            MessageBox.Show("No Linux partitions (Ext2/3/4 or JFFS2) found in this image.\n\nThe image might be:\n- Encrypted\n- Using a feature not supported by PreFusion Firmware Tools\n- Not a valid disk image", "No Partitions Found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             return;
                         }
 
+                        // Ext2 Partitions
                         foreach (var part in partitions)
                         {
                             var fs = new Ext2FileSystem(part);
@@ -310,8 +355,21 @@ namespace Ext2Read.WinForms
                                 node.SelectedImageIndex = 0;
                                 treeView1.Nodes.Add(node);
                                 node.Nodes.Add("Loading...");
-                                node.Expand(); // Auto expand images
+                                node.Expand(); 
                             }
+                        }
+
+                        // JFFS2 Volumes
+                        foreach (var jffs2 in _diskManager.Jffs2Volumes)
+                        {
+                            // JFFS2 is already mounted/scanned in constructor
+                            TreeNode node = new TreeNode($"{jffs2.VolumeName} (JFFS2)");
+                            node.Tag = new NodeData { Jffs2System = jffs2, Jffs2Entry = jffs2.Root }; // Root entry
+                            node.ImageIndex = 0;
+                            node.SelectedImageIndex = 0;
+                            treeView1.Nodes.Add(node);
+                            node.Nodes.Add("Loading...");
+                            node.Expand();
                         }
                     }
                     catch (Exception ex)
@@ -659,25 +717,18 @@ namespace Ext2Read.WinForms
 
         private void InitializeHelpMenu()
         {
-            // Find existing MenuStrip or add new
-            MenuStrip ms = this.MainMenuStrip;
-            if (ms == null) return;
-            
-            // Checks if "Help" menu exists
-            ToolStripMenuItem helpMenu = null;
-            foreach(ToolStripItem item in ms.Items)
-            {
-                if (item is ToolStripMenuItem menuItem && menuItem.Text == "Help") 
-                { 
-                    helpMenu = menuItem; 
-                    break; 
-                }
-            }
+            // Use the existing Help menu item directly
+            ToolStripMenuItem helpMenu = this.helpToolStripMenuItem;
 
             if (helpMenu == null)
             {
-                helpMenu = new ToolStripMenuItem("Help");
+                // Fallback if InitializeComponent didn't run or failed (unlikely)
+                MenuStrip ms = this.MainMenuStrip;
+                if (ms == null) return;
+                
+                helpMenu = new ToolStripMenuItem("&Help");
                 ms.Items.Add(helpMenu);
+                this.helpToolStripMenuItem = helpMenu; // Assign back
             }
 
             // Separator before About (if items exist)
@@ -734,12 +785,6 @@ namespace Ext2Read.WinForms
             var data = item.Tag as NodeData;
             if (data == null) return;
 
-            // TODO: Check if directory? For now only files.
-            // NodeData doesn't explicitly store isDirectory but we can check Icon or similar.
-            // Or assume user knows what they are doing.
-            // But reading a directory as file gives garbage.
-            // We can check item.ImageIndex == 2 (File).
-
             if (item.ImageIndex == 1) // Dictionary
             {
                 MessageBox.Show("Folder copying is not yet supported.", "Info");
@@ -755,10 +800,16 @@ namespace Ext2Read.WinForms
                     {
                         using (var fs = new System.IO.FileStream(sfd.FileName, System.IO.FileMode.Create, System.IO.FileAccess.Write))
                         {
-                            // Call FileSystem ReadFile
-                            data.FileSystem.ReadFile(data.Inode, fs);
+                            if (data.Jffs2System != null && data.Jffs2Entry != null)
+                            {
+                                data.Jffs2System.ReadFile(data.Jffs2Entry, fs);
+                            }
+                            else if (data.FileSystem != null)
+                            {
+                                data.FileSystem.ReadFile(data.Inode, fs);
+                            }
                         }
-                        MessageBox.Show("File saved successfully!", "Success");
+                        MessageBox.Show("File saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     catch (Exception ex)
                     {
@@ -995,5 +1046,9 @@ namespace Ext2Read.WinForms
         public Ext2FileSystem FileSystem { get; set; }
         public uint Inode { get; set; }
         public string Name { get; set; }
+        
+        // JFFS2 Support
+        public Jffs2FileSystem Jffs2System { get; set; }
+        public Jffs2Entry Jffs2Entry { get; set; }
     }
 }
