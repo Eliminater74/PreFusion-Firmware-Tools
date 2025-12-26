@@ -25,6 +25,7 @@ namespace Ext2Read.WinForms
         // Tab 1: Signatures
         private ListView lstResults;
         private Button btnScan;
+        private Button btnLoadSigs; // New
         private Button btnExtractAll;
         private Button btnClear;
         private Button btnSaveLog;
@@ -48,6 +49,7 @@ namespace Ext2Read.WinForms
         private Label lblStringsStatus;
         private List<StringResult> _allStringData = new List<StringResult>();
         private List<StringResult> _filteredStringData = new List<StringResult>();
+        private List<Signature> _customSignatures = new List<Signature>(); // New
 
         // Shared
         private ProgressBar progressBar;
@@ -83,31 +85,36 @@ namespace Ext2Read.WinForms
             var tabSig = new TabPage("Signatures");
             tabControl.TabPages.Add(tabSig);
 
-            btnScan = new Button { Text = "Scan Signatures", Location = new Point(10, 10), Width = 120 };
+            // Tighter packing to fit in 760px width
+            btnScan = new Button { Text = "Scan", Location = new Point(6, 10), Width = 80 };
             btnScan.Click += BtnScan_Click;
             tabSig.Controls.Add(btnScan);
 
-            btnExtractAll = new Button { Text = "Extract All Found", Location = new Point(140, 10), Width = 120 };
+            btnLoadSigs = new Button { Text = "Load...", Location = new Point(90, 10), Width = 80 };
+            btnLoadSigs.Click += BtnLoadSigs_Click;
+            tabSig.Controls.Add(btnLoadSigs);
+
+            btnExtractAll = new Button { Text = "Extract All", Location = new Point(175, 10), Width = 90 };
             btnExtractAll.Click += BtnExtractAll_Click;
             tabSig.Controls.Add(btnExtractAll);
 
             chkRecursive = new CheckBox { Text = "Recursive (-M)", Location = new Point(270, 14), AutoSize = true };
             tabSig.Controls.Add(chkRecursive);
             
-            chkOpcodes = new CheckBox { Text = "Scan Opcodes (-A)", Location = new Point(410, 14), AutoSize = true };
+            chkOpcodes = new CheckBox { Text = "Opcodes (-A)", Location = new Point(375, 14), AutoSize = true };
             tabSig.Controls.Add(chkOpcodes);
 
-            var lblDepth = new Label { Text = "Depth:", Location = new Point(540, 15), AutoSize = true };
+            var lblDepth = new Label { Text = "Depth:", Location = new Point(475, 15), AutoSize = true };
             tabSig.Controls.Add(lblDepth);
 
-            numDepth = new NumericUpDown { Location = new Point(585, 12), Width = 40, Minimum = 1, Maximum = 5, Value = 2 };
+            numDepth = new NumericUpDown { Location = new Point(520, 12), Width = 35, Minimum = 1, Maximum = 5, Value = 2 };
             tabSig.Controls.Add(numDepth);
 
-            btnClear = new Button { Text = "Clear", Location = new Point(635, 10), Width = 50 };
+            btnClear = new Button { Text = "Clear", Location = new Point(565, 10), Width = 60 };
             btnClear.Click += BtnClear_Click;
             tabSig.Controls.Add(btnClear);
 
-            btnSaveLog = new Button { Text = "Save Log", Location = new Point(690, 10), Width = 65 };
+            btnSaveLog = new Button { Text = "Save Log", Location = new Point(630, 10), Width = 80 };
             btnSaveLog.Click += BtnSaveLog_Click;
             tabSig.Controls.Add(btnSaveLog);
 
@@ -276,6 +283,8 @@ namespace Ext2Read.WinForms
             {
                 // Filter signatures based on CheckBox
                 var sigs = Scanner.DefaultSignatures.ToList();
+                if (_customSignatures.Count > 0) sigs.AddRange(_customSignatures); // Add Custom
+
                 if (!chkOpcodes.Checked)
                 {
                     sigs.RemoveAll(s => s.Name.Contains("Loop/Branch"));
@@ -303,6 +312,27 @@ namespace Ext2Read.WinForms
             {
                 btnScan.Enabled = true;
                 progressBar.Value = 0;
+            }
+        }
+
+        private void BtnLoadSigs_Click(object? sender, EventArgs e)
+        {
+            using (var ofd = new OpenFileDialog { Filter = "Signature Files (*.magic;*.txt)|*.magic;*.txt|All Files|*.*" })
+            {
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    var loaded = Scanner.LoadSignatures(ofd.FileName);
+                    if (loaded.Count > 0)
+                    {
+                        _customSignatures.AddRange(loaded);
+                        MessageBox.Show($"Loaded {loaded.Count} signatures.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        lblStatus.Text = $"Custom signatures loaded: {_customSignatures.Count}";
+                    }
+                    else
+                    {
+                        MessageBox.Show("No valid signatures found in file.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
             }
         }
 

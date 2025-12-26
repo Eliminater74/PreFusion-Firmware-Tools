@@ -266,5 +266,43 @@ namespace Ext2Read.Core.Binwalk
             }
             return results;
         }
+        public static List<Signature> LoadSignatures(string path)
+        {
+            var sigs = new List<Signature>();
+            if (!File.Exists(path)) return sigs;
+
+            foreach (var line in File.ReadAllLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(line) || line.Trim().StartsWith("#") || line.Trim().StartsWith("//")) continue;
+
+                var parts = line.Split(';');
+                if (parts.Length < 2) continue;
+
+                try
+                {
+                    string name = parts[0].Trim();
+                    string hex = parts[1].Trim().Replace(" ", "").Replace("0x", "");
+                    
+                    if (hex.Length % 2 != 0) continue; // Invalid hex
+
+                    byte[] magic = new byte[hex.Length / 2];
+                    for (int i = 0; i < hex.Length; i += 2)
+                        magic[i / 2] = Convert.ToByte(hex.Substring(i, 2), 16);
+
+                    int offset = 0;
+                    if (parts.Length > 2)
+                    {
+                        int.TryParse(parts[2].Trim(), out offset);
+                    }
+
+                    sigs.Add(new Signature { Name = name, Magic = magic, MagicOffset = offset });
+                }
+                catch
+                {
+                    // Ignore bad lines
+                }
+            }
+            return sigs;
+        }
     }
 }
