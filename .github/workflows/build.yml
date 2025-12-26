@@ -30,23 +30,25 @@ jobs:
         run: |
           dotnet publish ./PreFusion_Firmware_Tools/PreFusion.WinForms/PreFusion.WinForms.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ./publish
 
-        Compress-Archive -Path ./publish/* -DestinationPath ./PreFusion_Firmware_Tools_win-x64.zip
+      - name: Create Zip Archive
+        run: |
+          Compress-Archive -Path ./publish/* -DestinationPath ./PreFusion_Firmware_Tools_win-x64.zip
 
-    - name: Setup Inno Setup
-      run: |
-        choco install innosetup --no-progress
+      - name: Setup Inno Setup
+        run: |
+          choco install innosetup --no-progress
 
-    - name: Compile Installer
-      run: |
-        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" ./Installer/setup.iss
+      - name: Compile Installer
+        run: |
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" ./Installer/setup.iss
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          ./PreFusion_Firmware_Tools_win-x64.zip
-          ./Output/PreFusion_Setup_win-x64.exe
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ./PreFusion_Firmware_Tools_win-x64.zip
+            ./Output/PreFusion_Setup_win-x64.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
