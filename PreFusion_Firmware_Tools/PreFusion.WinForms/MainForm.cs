@@ -16,6 +16,7 @@ namespace Ext2Read.WinForms
         private ToolStripMenuItem toolsToolStripMenuItem;
         private ToolStripMenuItem convertSparseToolStripMenuItem;
         private ToolStripMenuItem otaUnpackerToolStripMenuItem;
+        private ToolStripMenuItem payloadUnpackerToolStripMenuItem;
         private ToolStripMenuItem repackAndroidImageToolStripMenuItem;
         private ToolStripMenuItem analyzeFirmwareToolStripMenuItem;
         private ToolStripMenuItem autoScanToolStripMenuItem;
@@ -373,6 +374,12 @@ namespace Ext2Read.WinForms
             form.ShowDialog();
         }
 
+        private void payloadUnpackerToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            var form = new PayloadUnpackerForm();
+            form.ShowDialog();
+        }
+
         private void InitializeComponent()
         {
             this.menuStrip1 = new System.Windows.Forms.MenuStrip();
@@ -383,6 +390,7 @@ namespace Ext2Read.WinForms
             this.toolsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.convertSparseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.otaUnpackerToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.payloadUnpackerToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.repackAndroidImageToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.analyzeFirmwareToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.autoScanToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -454,6 +462,7 @@ namespace Ext2Read.WinForms
             this.toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.convertSparseToolStripMenuItem,
             this.otaUnpackerToolStripMenuItem,
+            this.payloadUnpackerToolStripMenuItem,
             this.repackAndroidImageToolStripMenuItem,
             this.analyzeFirmwareToolStripMenuItem,
             this.autoScanToolStripMenuItem});
@@ -476,6 +485,14 @@ namespace Ext2Read.WinForms
             this.otaUnpackerToolStripMenuItem.Size = new System.Drawing.Size(262, 22);
             this.otaUnpackerToolStripMenuItem.Text = "Unpack Android OTA...";
             this.otaUnpackerToolStripMenuItem.Click += new System.EventHandler(this.otaUnpackerToolStripMenuItem_Click);
+
+            // 
+            // payloadUnpackerToolStripMenuItem
+            // 
+            this.payloadUnpackerToolStripMenuItem.Name = "payloadUnpackerToolStripMenuItem";
+            this.payloadUnpackerToolStripMenuItem.Size = new System.Drawing.Size(262, 22);
+            this.payloadUnpackerToolStripMenuItem.Text = "Unpack Payload.bin / .zip...";
+            this.payloadUnpackerToolStripMenuItem.Click += new System.EventHandler(this.payloadUnpackerToolStripMenuItem_Click);
 
             // 
             // repackAndroidImageToolStripMenuItem
