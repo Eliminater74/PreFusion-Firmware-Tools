@@ -342,12 +342,15 @@ namespace Ext2Read.WinForms
                             return;
                         }
 
+                        int mountedCount = 0;
+
                         // Ext2 Partitions
                         foreach (var part in partitions)
                         {
                             var fs = new Ext2FileSystem(part);
                             if (fs.Mount())
                             {
+                                mountedCount++;
                                 _fileSystems.Add(fs);
                                 TreeNode node = new TreeNode($"{part.Name} ({fs.VolumeName})");
                                 node.Tag = new NodeData { FileSystem = fs, Inode = 2 };
@@ -362,6 +365,7 @@ namespace Ext2Read.WinForms
                         // JFFS2 Volumes
                         foreach (var jffs2 in _diskManager.Jffs2Volumes)
                         {
+                            mountedCount++;
                             // JFFS2 is already mounted/scanned in constructor
                             TreeNode node = new TreeNode($"{jffs2.VolumeName} (JFFS2)");
                             node.Tag = new NodeData { Jffs2System = jffs2, Jffs2Entry = jffs2.Root }; // Root entry
@@ -370,6 +374,11 @@ namespace Ext2Read.WinForms
                             treeView1.Nodes.Add(node);
                             node.Nodes.Add("Loading...");
                             node.Expand();
+                        }
+
+                        if (mountedCount == 0)
+                        {
+                             MessageBox.Show("Partitions were detected but failed to mount.\n\nThis usually means the filesystem contains invalid metadata (corrupt superblock), is encrypted, or uses unsupported features.\n\nIf you extracted this using Binwalk, it might be a false positive signature match.", "Mount Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         }
                     }
                     catch (Exception ex)

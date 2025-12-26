@@ -42,9 +42,15 @@ namespace Ext2Read.Core
             if (_superBlock.s_magic != Ext2Constants.EXT2_SUPER_MAGIC)
                 return false;
 
+            // Sanity Checks for Corrupt Images
+            if (_superBlock.s_log_block_size > 16) return false; // Block size > 64MB is impossible (standard is max 65536)
+            if (_superBlock.s_inodes_per_group == 0) return false;
+            if (_superBlock.s_blocks_per_group == 0) return false;
+
             _blockSize = (int)(Ext2Constants.EXT2_MIN_BLOCK_SIZE << (int)_superBlock.s_log_block_size);
 
             _inodeSize = (_superBlock.s_rev_level == 0) ? 128 : _superBlock.s_inode_size;
+            if (_inodeSize == 0 || _inodeSize > _blockSize) return false; // Sanity check
 
             ReadGroupDescriptors();
             return true;
@@ -52,7 +58,10 @@ namespace Ext2Read.Core
 
         private void ReadGroupDescriptors()
         {
-            int groupsCount = (int)((_superBlock.s_blocks_count - _superBlock.s_first_data_block + _superBlock.s_blocks_per_group - 1) / _superBlock.s_blocks_per_group);
+            // Use long to prevent overflow during calculation
+            long blocksCount = _superBlock.s_blocks_count;
+            long blocksPerGroup = _superBlock.s_blocks_per_group;
+            int groupsCount = (int)((blocksCount - _superBlock.s_first_data_block + blocksPerGroup - 1) / blocksPerGroup);
             _groupDescriptors = new EXT2_GROUP_DESC[groupsCount];
 
             // GDT starts at block s_first_data_block + 1
@@ -102,7 +111,8 @@ namespace Ext2Read.Core
             if ((inode.i_mode & Ext2Constants.S_IFDIR) == 0) return files;
 
             // Iterate blocks
-            int nBlocks = (int)(inode.i_size + _blockSize - 1) / _blockSize;
+            long dirSize = inode.i_size | ((long)inode.i_size_high << 32);
+            long nBlocks = (dirSize + _blockSize - 1) / _blockSize;
             StringBuilder debug = new StringBuilder();
             debug.AppendLine($"Listing Inode {dirInodeNum}: Size={inode.i_size}, Blocks={inode.i_blocks}, nBlocks={nBlocks}");
 
