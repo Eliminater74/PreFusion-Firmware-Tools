@@ -11,4 +11,13 @@
     <RepositoryUrl>https://github.com/Eliminater74/PreFusion-Firmware-Tools</RepositoryUrl>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="7-Zip.CommandLine" Version="25.1.0" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copy 7za.exe to the output directory -->
+    <None Include="$(Pkg7-Zip_CommandLine)\tools\7za.exe" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
 </Project>
