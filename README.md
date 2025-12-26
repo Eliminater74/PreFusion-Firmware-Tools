@@ -75,7 +75,7 @@ A C# native implementation of the popular `binwalk` analysis tool.
 
 We are constantly working to expand the toolkit's capabilities. Planned features include:
 
--   [ ] **JFFS2 Content Extraction**: Porting `jefferson` logic to allow browsing and extracting files from JFFS2 partitions.
+-   [ ] **JFFS2 Content Extraction**: Porting [jefferson](https://github.com/onekey-sec/jefferson) logic to allow browsing and extracting files from JFFS2 partitions.
 -   [ ] **UBI/UBIFS Support**: Reader support for raw UBI NAND images.
 -   [ ] **Hex Editor**: A built-in lightweight hex viewer/editor for quick patches.
 -   [ ] **Plugin System**: Allow community written scripts for custom unpacking.
