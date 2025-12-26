@@ -51,6 +51,11 @@ namespace Ext2Read.WinForms
         private List<StringResult> _filteredStringData = new List<StringResult>();
         private List<Signature> _customSignatures = new List<Signature>(); // New
 
+        // Signature Filter
+        private TextBox txtSigFilter;
+        private List<ScanResult> _allScanResults = new List<ScanResult>();
+        private List<ScanResult> _filteredScanResults = new List<ScanResult>();
+
         // Shared
         private ProgressBar progressBar;
         private Label lblStatus;
@@ -118,11 +123,19 @@ namespace Ext2Read.WinForms
             btnSaveLog.Click += BtnSaveLog_Click;
             tabSig.Controls.Add(btnSaveLog);
 
+            // Filter
+            var lblSigFilter = new Label { Text = "Filter:", Location = new Point(10, 45), AutoSize = true };
+            tabSig.Controls.Add(lblSigFilter);
+
+            txtSigFilter = new TextBox { Location = new Point(50, 42), Width = 200 };
+            txtSigFilter.TextChanged += TxtSigFilter_TextChanged;
+            tabSig.Controls.Add(txtSigFilter);
+
             lstResults = new ListView
             {
-                Location = new Point(10, 45),
+                Location = new Point(10, 70),
                 Width = 730,
-                Height = 400,
+                Height = 375,
                 View = View.Details,
                 FullRowSelect = true,
                 GridLines = true,
@@ -291,18 +304,11 @@ namespace Ext2Read.WinForms
                 }
 
                 var results = await Scanner.ScanAsync(file, progress, sigs);
+                _allScanResults = results; // Store full list
+                
+                ApplySigFilter(); // Apply filter and populate list
 
-                lstResults.BeginUpdate();
-                foreach (var res in results)
-                {
-                    var item = new ListViewItem(res.Offset.ToString());
-                    item.SubItems.Add("0x" + res.Offset.ToString("X"));
-                    item.SubItems.Add(res.Description);
-                    item.Tag = res;
-                    lstResults.Items.Add(item);
-                }
-                lstResults.EndUpdate();
-                lblStatus.Text = $"Found {results.Count} signatures.";
+                lblStatus.Text = $"Found {_allScanResults.Count} signatures.";
             }
             catch (Exception ex)
             {
@@ -333,6 +339,47 @@ namespace Ext2Read.WinForms
                         MessageBox.Show("No valid signatures found in file.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                 }
+            }
+        }
+
+        private void TxtSigFilter_TextChanged(object? sender, EventArgs e)
+        {
+            ApplySigFilter();
+        }
+
+        private void ApplySigFilter()
+        {
+            string filter = txtSigFilter.Text.ToLower();
+            
+            if (string.IsNullOrWhiteSpace(filter))
+            {
+                _filteredScanResults = new List<ScanResult>(_allScanResults);
+            }
+            else
+            {
+                _filteredScanResults = _allScanResults
+                    .Where(r => r.Description.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 || 
+                                r.Offset.ToString().Contains(filter) || 
+                                r.Offset.ToString("X").IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToList();
+            }
+
+            lstResults.BeginUpdate();
+            lstResults.Items.Clear();
+            foreach (var res in _filteredScanResults)
+            {
+                var item = new ListViewItem(res.Offset.ToString());
+                item.SubItems.Add("0x" + res.Offset.ToString("X"));
+                item.SubItems.Add(res.Description);
+                item.Tag = res; // Essential for extraction
+                lstResults.Items.Add(item);
+            }
+            lstResults.EndUpdate();
+            
+            // Update status only if filter is active
+            if (!string.IsNullOrWhiteSpace(filter))
+            {
+                lblStatus.Text = $"Showing {_filteredScanResults.Count} of {_allScanResults.Count} signatures.";
             }
         }
 
