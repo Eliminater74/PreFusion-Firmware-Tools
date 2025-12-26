@@ -30,10 +30,14 @@ namespace Ext2Read.WinForms
             this.Size = new System.Drawing.Size(600, 450);
             this.StartPosition = FormStartPosition.CenterParent;
 
-            var lblInput = new Label { Text = "Input Image (.img):", Location = new System.Drawing.Point(12, 15), AutoSize = true };
-            txtInputFile = new TextBox { Location = new System.Drawing.Point(15, 35), Width = 450, ReadOnly = true };
-            btnBrowseInput = new Button { Text = "...", Location = new System.Drawing.Point(475, 33), Width = 40 };
+            var lblInput = new Label { Text = "Input :", Location = new System.Drawing.Point(12, 15), AutoSize = true };
+            txtInputFile = new TextBox { Location = new System.Drawing.Point(15, 35), Width = 400, ReadOnly = true, PlaceholderText = "Select File or Folder..." };
+            btnBrowseInput = new Button { Text = "File...", Location = new System.Drawing.Point(420, 33), Width = 60 };
             btnBrowseInput.Click += BtnBrowseInput_Click;
+
+            var btnBrowseFolder = new Button { Text = "Folder...", Location = new System.Drawing.Point(485, 33), Width = 60 };
+            btnBrowseFolder.Click += BtnBrowseFolder_Click;
+            this.Controls.Add(btnBrowseFolder);
 
             var lblOutput = new Label { Text = "Output Directory:", Location = new System.Drawing.Point(12, 70), AutoSize = true };
             txtOutputDir = new TextBox { Location = new System.Drawing.Point(15, 90), Width = 450, ReadOnly = true };
@@ -65,18 +69,43 @@ namespace Ext2Read.WinForms
             this.Controls.Add(txtLog);
         }
 
+        private void BtnBrowseFolder_Click(object? sender, EventArgs e)
+        {
+            using (var fbd = new FolderBrowserDialog())
+            {
+                if (fbd.ShowDialog() == DialogResult.OK)
+                {
+                    txtInputFile.Text = fbd.SelectedPath;
+                    SetDefaultOutput(fbd.SelectedPath);
+                }
+            }
+        }
+
         private void BtnBrowseInput_Click(object? sender, EventArgs e)
         {
-            using (var ofd = new OpenFileDialog { Filter = "Disk Images (*.img)|*.img|All Files (*.*)|*.*" })
+            using (var ofd = new OpenFileDialog { Filter = "Disk Images (*.img)|*.img|All Files (*.*)|*.*", Multiselect = true })
             {
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
-                    txtInputFile.Text = ofd.FileName;
-                    if (string.IsNullOrEmpty(txtOutputDir.Text))
+                    if (ofd.FileNames.Length > 1)
                     {
-                        txtOutputDir.Text = Path.GetDirectoryName(ofd.FileName);
+                        txtInputFile.Text = string.Join(";", ofd.FileNames);
+                        SetDefaultOutput(Path.GetDirectoryName(ofd.FileNames[0])!);
+                    }
+                    else
+                    {
+                        txtInputFile.Text = ofd.FileName;
+                        SetDefaultOutput(Path.GetDirectoryName(ofd.FileName)!);
                     }
                 }
+            }
+        }
+
+        private void SetDefaultOutput(string path)
+        {
+            if (string.IsNullOrEmpty(txtOutputDir.Text))
+            {
+                txtOutputDir.Text = path;
             }
         }
 
@@ -93,12 +122,12 @@ namespace Ext2Read.WinForms
 
         private async void BtnRepack_Click(object? sender, EventArgs e)
         {
-            string inputFile = txtInputFile.Text;
+            string input = txtInputFile.Text;
             string outputDir = txtOutputDir.Text;
 
-            if (!File.Exists(inputFile))
+            if (string.IsNullOrEmpty(input))
             {
-                MessageBox.Show("Please select a valid input file.");
+                MessageBox.Show("Please select valid input(s).");
                 return;
             }
             if (!Directory.Exists(outputDir))
@@ -108,51 +137,83 @@ namespace Ext2Read.WinForms
             }
 
             btnRepack.Enabled = false;
-            txtLog.AppendText($"Starting repack of {Path.GetFileName(inputFile)}...\r\n");
-            lblStatus.Text = "Analyzing and Writing .new.dat...";
-            progressBar.Value = 0;
+            txtLog.AppendText($"Starting batch Repack...\r\n");
+            
+            // Collect files
+            var filesToProcess = new System.Collections.Generic.List<string>();
 
-            try
+            if (Directory.Exists(input))
             {
-                var progress = new Progress<float>(p => 
+                // Is Folder
+                filesToProcess.AddRange(Directory.GetFiles(input, "*.img"));
+            }
+            else if (input.Contains(";"))
+            {
+                // Multiple files
+                filesToProcess.AddRange(input.Split(';'));
+            }
+            else if (File.Exists(input))
+            {
+                // Single File
+                filesToProcess.Add(input);
+            }
+
+            if (filesToProcess.Count == 0)
+            {
+                MessageBox.Show("No .img files found to repack.");
+                btnRepack.Enabled = true;
+                return;
+            }
+
+            int count = 0;
+            int total = filesToProcess.Count;
+
+            foreach (var inputFile in filesToProcess)
+            {
+                count++;
+                lblStatus.Text = $"Processing {count}/{total}: {Path.GetFileName(inputFile)}";
+                txtLog.AppendText($"[{count}/{total}] Repacking {Path.GetFileName(inputFile)}...\r\n");
+                progressBar.Value = 0;
+
+                try
                 {
-                    // Scale 0-100
-                    int val = (int)(p * 100);
-                    if (val > 100) val = 100;
-                    progressBar.Value = val;
-                });
-
-                var result = await Task.Run(() => OtaRepacker.RepackImageAsync(inputFile, outputDir, chkCompress.Checked, progress));
-
-                txtLog.AppendText($"Generated: {Path.GetFileName(result.NewDatPath)}\r\n");
-                txtLog.AppendText($"Generated: {Path.GetFileName(result.TransferListPath)}\r\n");
-                txtLog.AppendText($"Total Blocks: {result.TotalBlocks}\r\n");
-
-                if (chkCleanup.Checked && chkCompress.Checked)
-                {
-                    // If we compressed, result.NewDatPath is the .br file.
-                    // The .new.dat file is the one without .br
-                    string rawDat = result.NewDatPath.Replace(".br", "");
-                    if (File.Exists(rawDat) && rawDat != result.NewDatPath)
+                    var progress = new Progress<float>(p => 
                     {
-                        File.Delete(rawDat);
-                        txtLog.AppendText($"Cleaned up: {Path.GetFileName(rawDat)}\r\n");
+                        int val = (int)(p * 100);
+                        if (val > 100) val = 100;
+                        progressBar.Value = val;
+                    });
+
+                    // Don't stop batch on single error
+                    var result = await Task.Run(() => OtaRepacker.RepackImageAsync(inputFile, outputDir, chkCompress.Checked, progress));
+
+                    txtLog.AppendText($"  -> Dat: {Path.GetFileName(result.NewDatPath)}\r\n");
+                    txtLog.AppendText($"  -> Transfer: {result.TotalBlocks} blocks\r\n");
+
+                    if (chkCleanup.Checked && chkCompress.Checked)
+                    {
+                        string rawDat = result.NewDatPath.Replace(".br", "");
+                        if (File.Exists(rawDat) && rawDat != result.NewDatPath)
+                        {
+                             // Ensure we don't delete if we didn't compress (i.e. NewDatPath IS rawDat)
+                             // Logic inside Repacker returns the final path.
+                             // result.NewDatPath is .br if compressed.
+                             File.Delete(rawDat);
+                             txtLog.AppendText($"  -> Cleaned .dat\r\n");
+                        }
                     }
                 }
+                catch (Exception ex)
+                {
+                    txtLog.AppendText($"ERROR processing {Path.GetFileName(inputFile)}: {ex.Message}\r\n");
+                }
+            }
 
-                lblStatus.Text = "Repack Complete.";
-                MessageBox.Show("Repack completed successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                txtLog.AppendText($"Error: {ex.Message}\r\n");
-                lblStatus.Text = "Error.";
-                MessageBox.Show($"Error during repack: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                btnRepack.Enabled = true;
-            }
+            lblStatus.Text = "Batch Repack Complete.";
+            progressBar.Value = 100;
+            MessageBox.Show($"Batch processing complete.\nProcessed {total} files.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            
+            btnRepack.Enabled = true;
         }
     }
 }
