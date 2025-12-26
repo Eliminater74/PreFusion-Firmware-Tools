@@ -36,7 +36,7 @@ namespace Ext2Read.WinForms
             // Version
             var lblVersion = new Label
             {
-                Text = "Version 1.0.0",
+                Text = "Version 1.0.1",
                 Font = new System.Drawing.Font("Segoe UI", 10F),
                 AutoSize = true,
                 Location = new System.Drawing.Point(22, y)

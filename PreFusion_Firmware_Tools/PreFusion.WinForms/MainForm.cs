@@ -673,7 +673,7 @@ namespace Ext2Read.WinForms
             this.Controls.Add(this.menuStrip1);
             this.MainMenuStrip = this.menuStrip1;
             this.Name = "MainForm";
-            this.Text = "PreFusion Firmware Tools v1.0.0";
+            this.Text = "PreFusion Firmware Tools v1.0.1";
             this.Load += new System.EventHandler(this.MainForm_Load);
             this.menuStrip1.ResumeLayout(false);
             this.menuStrip1.PerformLayout();
