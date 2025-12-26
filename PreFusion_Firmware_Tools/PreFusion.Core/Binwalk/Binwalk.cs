@@ -57,7 +57,8 @@ namespace Ext2Read.Core.Binwalk
             new Signature { Name = "SquashFS (LE)", Magic = new byte[] { 0x68, 0x73, 0x71, 0x73 } },
             new Signature { Name = "CramFS (LE)", Magic = new byte[] { 0x45, 0x3D, 0xCD, 0x28 } },
             new Signature { Name = "CramFS (BE)", Magic = new byte[] { 0x28, 0xCD, 0x3D, 0x45 } },
-            new Signature { Name = "Ext2/3/4", Magic = new byte[] { 0x53, 0xEF }, MagicOffset = 0x38 }, 
+            // Ext2 SB is at 1024. Magic is at 56 (0x38) inside SB. Total offset = 1024 + 56 = 1080 (0x438).
+            new Signature { Name = "Ext2/3/4", Magic = new byte[] { 0x53, 0xEF }, MagicOffset = 0x438 }, 
             new Signature { Name = "JFFS2 (BE)", Magic = new byte[] { 0x19, 0x85 } },
             new Signature { Name = "JFFS2 (LE)", Magic = new byte[] { 0x85, 0x19 } },
             new Signature { Name = "UBI", Magic = new byte[] { 0x55, 0x42, 0x49, 0x23 } }, 
