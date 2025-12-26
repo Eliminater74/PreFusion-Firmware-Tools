@@ -28,6 +28,12 @@ namespace Ext2Read.Core.Binwalk
         public string Description { get; set; }
     }
 
+    public class EntropyResult
+    {
+        public long Offset { get; set; }
+        public double Entropy { get; set; } // 0.0 to 8.0
+    }
+
     public static class Scanner
     {
         public static List<Signature> DefaultSignatures = new List<Signature>
@@ -130,6 +136,55 @@ namespace Ext2Read.Core.Binwalk
             }
 
             return results;
+        }
+
+        public static async Task<List<EntropyResult>> CalculateEntropyAsync(string file, int blockSize = 1024, IProgress<float> progress = null)
+        {
+            var results = new List<EntropyResult>();
+            if (!File.Exists(file)) return results;
+
+            using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                byte[] buffer = new byte[blockSize];
+                long length = fs.Length;
+                long totalRead = 0;
+                int bytesRead;
+
+                while ((bytesRead = await fs.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    double entropy = CalculateBlockEntropy(buffer, bytesRead);
+                    results.Add(new EntropyResult { Offset = totalRead, Entropy = entropy });
+
+                    totalRead += bytesRead;
+                    if (progress != null) progress.Report((float)totalRead / length);
+                }
+            }
+            return results;
+        }
+
+        private static double CalculateBlockEntropy(byte[] data, int length)
+        {
+            if (length == 0) return 0;
+
+            int[] frequencies = new int[256];
+            for (int i = 0; i < length; i++)
+            {
+                frequencies[data[i]]++;
+            }
+
+            double entropy = 0;
+            double len = (double)length;
+
+            foreach (var count in frequencies)
+            {
+                if (count > 0)
+                {
+                    double p = count / len;
+                    entropy -= p * Math.Log(p, 2);
+                }
+            }
+
+            return entropy;
         }
     }
 }
