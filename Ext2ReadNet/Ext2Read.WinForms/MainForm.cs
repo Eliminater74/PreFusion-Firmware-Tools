@@ -16,6 +16,7 @@ namespace Ext2Read.WinForms
         private ToolStripMenuItem toolsToolStripMenuItem;
         private ToolStripMenuItem convertSparseToolStripMenuItem;
         private ToolStripMenuItem otaUnpackerToolStripMenuItem;
+        private ToolStripMenuItem analyzeFirmwareToolStripMenuItem;
         private ToolStripMenuItem autoScanToolStripMenuItem;
         private ToolStripMenuItem helpToolStripMenuItem;
         private ToolStripMenuItem aboutToolStripMenuItem;
@@ -375,6 +376,7 @@ namespace Ext2Read.WinForms
             this.toolsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.convertSparseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.otaUnpackerToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.analyzeFirmwareToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.autoScanToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.helpToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.aboutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -444,6 +446,7 @@ namespace Ext2Read.WinForms
             this.toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.convertSparseToolStripMenuItem,
             this.otaUnpackerToolStripMenuItem,
+            this.analyzeFirmwareToolStripMenuItem,
             this.autoScanToolStripMenuItem});
             this.toolsToolStripMenuItem.Name = "toolsToolStripMenuItem";
             this.toolsToolStripMenuItem.Size = new System.Drawing.Size(46, 20);
@@ -472,6 +475,14 @@ namespace Ext2Read.WinForms
             this.otaUnpackerToolStripMenuItem.Size = new System.Drawing.Size(262, 22);
             this.otaUnpackerToolStripMenuItem.Text = "Unpack Android OTA...";
             this.otaUnpackerToolStripMenuItem.Click += new System.EventHandler(this.otaUnpackerToolStripMenuItem_Click);
+
+            // 
+            // analyzeFirmwareToolStripMenuItem
+            // 
+            this.analyzeFirmwareToolStripMenuItem.Name = "analyzeFirmwareToolStripMenuItem";
+            this.analyzeFirmwareToolStripMenuItem.Size = new System.Drawing.Size(262, 22);
+            this.analyzeFirmwareToolStripMenuItem.Text = "Analyze Firmware (BinWalk)";
+            this.analyzeFirmwareToolStripMenuItem.Click += new System.EventHandler(this.analyzeFirmwareToolStripMenuItem_Click);
 
             // 
             // autoScanToolStripMenuItem
@@ -850,6 +861,14 @@ namespace Ext2Read.WinForms
         private void otaUnpackerToolStripMenuItem_Click(object sender, EventArgs e)
         {
             using (var form = new OtaUnpackerForm())
+            {
+                form.ShowDialog(this);
+            }
+        }
+
+        private void analyzeFirmwareToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (var form = new BinwalkForm())
             {
                 form.ShowDialog(this);
             }
