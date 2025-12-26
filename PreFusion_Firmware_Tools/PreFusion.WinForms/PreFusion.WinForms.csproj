@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Ext2Read.Core\Ext2Read.Core.csproj" />
+    <ProjectReference Include="..\PreFusion.Core\PreFusion.Core.csproj" />
   </ItemGroup>
 
 </Project>
